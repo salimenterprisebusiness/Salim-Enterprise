@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Salim Enterprise</title>
+    
+    <!-- PWA & Apple Meta Tags -->
+    <meta name="theme-color" content="#FF6B00">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Salim Enterprise">
+    <link rel="manifest" id="manifest-link">
+
+    <!-- Google Fonts for Clean UI -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- QR Code Generator Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+
+    <!-- HTML5 QR Code Scanner Library -->
+    <script src="https://unpkg.com/html5-qrcode"></script>
+
+    <!-- Tailwind Config for Custom Colors -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        orange: {
+                            500: '#FF6B00',
+                            50: '#FFF0E5',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Base Reset & Prevent Scrolling */
+        * {
+            -webkit-tap-highlight-color: transparent;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden; 
+            background-color: #f3f4f6; 
+            font-family: 'Inter', sans-serif;
+            touch-action: none; 
+        }
+
+        /* App Container - Full screen on mobile */
+        .app-container {
+            width: 100%;
+            height: 100dvh; 
+            background-color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+            margin: 0 auto;
+        }
+
+        /* View Transitions */
+        .view-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.4s ease, transform 0.4s ease;
+            transform: translateY(10px);
+        }
+
+        .view-screen.active {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translateY(0);
+        }
+
+        /* Nav Button Animation */
+        .nav-btn.active i {
+            color: #FF6B00;
+            transform: translateY(-4px);
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.2s;
+        }
+        .nav-btn.active span {
+            color: #FF6B00;
+            font-weight: 600;
+            transform: translateY(-4px);
+            transition: transform 0.3s ease, color 0.2s;
+        }
+
+        /* Sidebar Styles */
+        .sidebar-overlay {
+            position: absolute;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(4px);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+            z-index: 40;
+        }
+        .sidebar-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .sidebar-panel {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 75%;
+            max-width: 300px;
+            height: 100%;
+            background-color: #ffffff;
+            transform: translateX(100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 50;
+            box-shadow: -4px 0 15px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+        }
+        .sidebar-panel.active {
+            transform: translateX(0);
+        }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        #reader video {
+            object-fit: cover !important;
+            width: 100% !important;
+            height: 100% !important;
+            min-height: 300px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <!-- Header -->
+        <header class="bg-orange-500 h-16 flex items-center justify-between px-5 shrink-0 z-20 shadow-md">
+            <div class="flex items-center gap-2 text-white">
+                <i data-lucide="layers" class="w-6 h-6"></i>
+                <h1 class="font-bold text-lg tracking-wide">Salim Enterprise</h1>
+            </div>
+            <button onclick="openSidebar()" class="text-white p-1 rounded-full active:bg-orange-600">
+                <i data-lucide="more-vertical" class="w-6 h-6"></i>
+            </button>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-1 relative bg-white overflow-hidden z-10">
+            <!-- View Status -->
+            <div id="view-status" class="view-screen items-start justify-start">
+                <div class="w-full h-full flex flex-col pt-6 px-6 overflow-y-auto no-scrollbar pb-24">
+                    <div class="flex justify-between items-start mb-6">
+                        <div>
+                            <h2 class="text-2xl font-bold text-gray-800 mb-1">Activity Status</h2>
+                            <p class="text-xs text-gray-400">Recent scan logs across all users</p>
+                        </div>
+                        <div class="flex gap-2 mt-1">
+                            <button onclick="manualRefreshStatus()" id="status-refresh-btn" class="hidden text-gray-400 hover:text-orange-500 transition-colors p-1 rounded">
+                                <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+                            </button>
+                            <button onclick="toggleStatusFilter()" id="status-filter-btn" class="text-gray-400 hover:text-orange-500 transition-colors p-1 rounded">
+                                <i data-lucide="filter" class="w-5 h-5"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Status Filter Panel -->
+                    <div id="status-filter-panel" class="hidden mb-4 bg-gray-50 p-3 rounded-xl border border-gray-200 text-xs shadow-sm">
+                        <div class="mb-3">
+                            <label class="block text-gray-500 mb-1 font-medium">Filter by User Name/ID</label>
+                            <input type="text" id="filter-user-name" placeholder="Enter user name..." class="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-orange-500 text-gray-700">
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="applyStatusFilter()" class="flex-1 bg-orange-500 text-white font-semibold py-1.5 rounded-lg active:scale-95 transition-transform">Apply Filter</button>
+                            <button onclick="clearStatusFilter()" class="flex-1 bg-gray-200 text-gray-700 font-semibold py-1.5 rounded-lg active:scale-95 transition-transform">Clear</button>
+                        </div>
+                    </div>
+                    
+                    <div id="status-log-container" class="flex flex-col gap-3">
+                        <!-- JS will populate logs here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- View QR -->
+            <div id="view-qr" class="view-screen items-start justify-start">
+                <div class="w-full h-full flex flex-col pt-6 px-6 overflow-y-auto no-scrollbar pb-24">
+                    <div class="flex justify-between items-start mb-6">
+                        <div>
+                            <h2 class="text-2xl font-bold text-gray-800 mb-1">Create Secure QR</h2>
+                            <p class="text-xs text-gray-400">Encrypted local storage format</p>
+                        </div>
+                        <!-- Bulk Mode Toggle -->
+                        <label class="flex flex-col items-center gap-1 cursor-pointer mt-1">
+                            <div class="relative">
+                                <input type="checkbox" id="bulk-mode-toggle" class="sr-only peer" onchange="toggleBulkMode()">
+                                <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-purple-500"></div>
+                            </div>
+                            <span class="text-[10px] font-semibold text-gray-500">Bulk Mode</span>
+                        </label>
+                    </div>
+                    
+                    <!-- Single Input Area -->
+                    <div id="single-qr-section" class="flex flex-col gap-3 shrink-0">
+                        <input type="text" id="qr-input-text" placeholder="Paste Text or Link here..." class="w-full bg-gray-50 border border-gray-200 text-gray-800 text-sm rounded-xl px-4 py-3.5 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-all">
+                        <button onclick="generateSecureQR()" class="w-full bg-orange-500 text-white font-semibold rounded-xl py-3.5 active:scale-95 transition-transform flex items-center justify-center gap-2 shadow-sm shadow-orange-200">
+                            <i data-lucide="zap" class="w-5 h-5"></i>
+                            Generate QR
+                        </button>
+                    </div>
+
+                    <!-- Bulk Input Area -->
+                    <div id="bulk-qr-section" class="hidden flex-col gap-3 shrink-0">
+                        <div class="bg-purple-50 border border-purple-100 rounded-xl p-3 mb-1">
+                            <p class="text-[11px] text-purple-700 font-medium">Use <span class="font-bold bg-white px-1 rounded shadow-sm">{CODE}</span> in template. It will be replaced by each line.</p>
+                        </div>
+                        <textarea id="qr-bulk-template" rows="2" placeholder="Template: Welcome, your code is {CODE}" class="w-full bg-gray-50 border border-gray-200 text-gray-800 text-sm rounded-xl px-4 py-3 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all resize-none"></textarea>
+                        <textarea id="qr-bulk-values" rows="3" placeholder="Code1&#10;Code2&#10;Code3" class="w-full bg-gray-50 border border-gray-200 text-gray-800 text-sm rounded-xl px-4 py-3 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all resize-none"></textarea>
+                        
+                        <button onclick="generateBulkSecureQR()" class="w-full bg-purple-500 text-white font-semibold rounded-xl py-3.5 active:scale-95 transition-transform flex items-center justify-center gap-2 shadow-sm shadow-purple-200">
+                            <i data-lucide="layers" class="w-5 h-5"></i>
+                            Generate Bulk QRs
+                        </button>
+                    </div>
+
+                    <!-- List Area -->
+                    <div class="mt-8 flex-1">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-sm font-semibold text-gray-800">Recent QR Codes</h3>
+                            <button onclick="toggleDateFilter()" class="text-gray-400 hover:text-orange-500 transition-colors p-1 rounded">
+                                <i data-lucide="filter" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+
+                        <!-- Date Filter Panel -->
+                        <div id="date-filter-panel" class="hidden mb-4 bg-gray-50 p-3 rounded-xl border border-gray-200 text-xs shadow-sm">
+                            <div class="flex gap-2 items-center mb-2">
+                                <div class="flex-1">
+                                    <label class="block text-gray-500 mb-1 font-medium">From Date</label>
+                                    <input type="date" id="filter-start-date" class="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-orange-500 text-gray-700">
+                                </div>
+                                <div class="flex-1">
+                                    <label class="block text-gray-500 mb-1 font-medium">To Date</label>
+                                    <input type="date" id="filter-end-date" class="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-orange-500 text-gray-700">
+                                </div>
+                            </div>
+                            <div class="flex gap-2">
+                                <button onclick="applyDateFilter()" class="flex-1 bg-orange-500 text-white font-semibold py-1.5 rounded-lg active:scale-95 transition-transform">Apply Filter</button>
+                                <button onclick="clearDateFilter()" class="flex-1 bg-gray-200 text-gray-700 font-semibold py-1.5 rounded-lg active:scale-95 transition-transform">Clear</button>
+                            </div>
+                        </div>
+
+                        <div id="qr-list-container" class="flex flex-col">
+                            <!-- JS will populate list here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- View Home -->
+            <div id="view-home" class="view-screen active items-start justify-start">
+                <div class="w-full h-full flex flex-col pt-6 px-6 overflow-y-auto no-scrollbar pb-24">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-1">Dashboard</h2>
+                    <p class="text-xs text-gray-400 mb-6">Overview of your QR system</p>
+                    <div class="grid grid-cols-3 gap-3 mb-6" id="home-stats-grid"></div>
+                    
+                    <div class="mb-6">
+                        <h3 class="text-sm font-semibold text-gray-800 mb-3">Staff Performance</h3>
+                        <div id="home-staff-stats" class="flex flex-col gap-2"></div>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-semibold text-gray-800 mb-3">Recent Activity</h3>
+                        <div id="home-recent-activity" class="flex flex-col gap-2"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- View Accounts -->
+            <div id="view-accounts" class="view-screen items-start justify-start">
+                <div class="w-full h-full flex flex-col pt-6 px-6 overflow-y-auto no-scrollbar pb-24">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-1">Accounts</h2>
+                    <p class="text-xs text-gray-400 mb-6">Manage admins and staff</p>
+                    <div id="accounts-container" class="flex flex-col gap-6"></div>
+                </div>
+            </div>
+
+            <!-- View Scan -->
+            <div id="view-scan" class="view-screen items-start justify-start">
+                <div class="w-full h-full flex flex-col pt-6 px-6 overflow-y-auto no-scrollbar pb-24">
+                    <div class="flex justify-between items-start mb-6">
+                        <div>
+                            <h2 class="text-2xl font-bold text-gray-800 mb-1">Scanner</h2>
+                            <p class="text-xs text-gray-400">Scan SE secure QR codes</p>
+                        </div>
+                        <label id="check-mode-container" class="flex flex-col items-center gap-1 cursor-pointer mt-1">
+                            <div class="relative">
+                                <input type="checkbox" id="check-mode-toggle" class="sr-only peer" onchange="toggleCheckMode()">
+                                <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-500"></div>
+                            </div>
+                            <span class="text-[10px] font-semibold text-gray-500">Check Mode</span>
+                        </label>
+                    </div>
+                    
+                    <div id="scanner-container" class="w-full bg-gray-900 rounded-2xl overflow-hidden shadow-inner flex-shrink-0 relative flex items-center justify-center" style="min-height: 300px;">
+                        <div id="reader" class="w-full h-full"></div>
+                        <div id="scanner-loader" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 bg-gray-900 z-10">
+                            <i data-lucide="camera" class="w-8 h-8 mb-2 opacity-50"></i>
+                            <span class="text-xs">Initializing Camera...</span>
+                        </div>
+                    </div>
+
+                    <div id="scan-result-card" class="hidden mt-6 bg-gray-50 border border-gray-200 rounded-2xl p-5 flex flex-col items-center text-center shadow-sm">
+                        <div id="result-icon-container" class="w-14 h-14 rounded-full flex items-center justify-center mb-3">
+                            <i id="result-icon" data-lucide="check-circle" class="w-8 h-8"></i>
+                        </div>
+                        <h3 id="result-title" class="font-bold text-lg text-gray-800 mb-1">Result</h3>
+                        <div class="w-full bg-white border border-gray-100 rounded-xl p-3 mb-4 mt-2">
+                            <p class="text-xs text-gray-400 mb-1 font-medium uppercase tracking-wider">QR Content:</p>
+                            <p id="result-text" class="text-sm text-gray-700 font-semibold break-words"></p>
+                        </div>
+                        <button onclick="resetScanner()" class="w-full bg-gray-800 text-white font-semibold rounded-xl py-3.5 active:scale-95 transition-transform">
+                            OK, Scan New
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Navigation -->
+        <footer class="h-[72px] bg-white border-t flex justify-around items-center shrink-0 z-30 px-2 pb-2">
+            <button onclick="switchTab('status')" id="nav-status" class="nav-btn flex-1 flex flex-col items-center justify-center text-gray-400 h-full">
+                <i data-lucide="activity" class="w-6 h-6 mt-2 relative z-10"></i>
+                <span class="text-[11px] mt-1 relative z-10">Status</span>
+            </button>
+            <button onclick="switchTab('qr')" id="nav-qr" class="nav-btn flex-1 flex flex-col items-center justify-center text-gray-400 h-full">
+                <i data-lucide="qr-code" class="w-6 h-6 mt-2 relative z-10"></i>
+                <span class="text-[11px] mt-1 relative z-10">QR</span>
+            </button>
+            <button onclick="switchTab('home')" id="nav-home" class="nav-btn active flex-1 flex flex-col items-center justify-center text-gray-400 h-full">
+                <i data-lucide="home" class="w-6 h-6 mt-2 relative z-10"></i>
+                <span class="text-[11px] mt-1 relative z-10">Home</span>
+            </button>
+            <button onclick="switchTab('accounts')" id="nav-accounts" class="nav-btn flex-1 flex flex-col items-center justify-center text-gray-400 h-full">
+                <i data-lucide="user" class="w-6 h-6 mt-2 relative z-10"></i>
+                <span class="text-[11px] mt-1 relative z-10">Accounts</span>
+            </button>
+            <button onclick="switchTab('scan')" id="nav-scan" class="nav-btn flex-1 flex flex-col items-center justify-center text-gray-400 h-full">
+                <i data-lucide="scan" class="w-6 h-6 mt-2 relative z-10"></i>
+                <span class="text-[11px] mt-1 relative z-10">Scan</span>
+            </button>
+        </footer>
+
+        <!-- Sidebar & Modals -->
+        <div id="sidebar-overlay" class="sidebar-overlay" onclick="closeSidebar()"></div>
+        <div id="sidebar-panel" class="sidebar-panel">
+            <div class="bg-orange-50 p-6 flex flex-col items-center border-b border-orange-100 relative">
+                <button onclick="closeSidebar()" class="absolute top-4 right-4 text-gray-400 active:text-gray-600 p-1 rounded-full">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+                <div class="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-sm mb-3 border-2 border-orange-200">
+                    <i data-lucide="user" class="w-10 h-10 text-orange-400"></i>
+                </div>
+                <h3 id="profile-name" class="font-bold text-gray-800">Guest User</h3>
+                <p id="profile-email" class="text-xs text-gray-500 mt-1">Please login to continue</p>
+            </div>
+            <div class="flex-1 overflow-y-auto py-4 px-4 space-y-2"></div>
+            <div class="p-4 border-t border-gray-100">
+                <button onclick="logout()" class="w-full flex items-center justify-center gap-2 py-3 bg-gray-100 rounded-xl font-semibold text-gray-700">
+                    <i data-lucide="log-out" class="w-5 h-5"></i> Logout
+                </button>
+            </div>
+        </div>
+
+        <!-- Auth Overlay -->
+        <div id="auth-overlay" class="absolute inset-0 z-[100] bg-white flex flex-col items-center justify-center transition-opacity duration-300">
+            <div id="auth-login-view" class="w-full max-w-sm px-8 flex flex-col items-center">
+                <div class="w-20 h-20 bg-orange-50 rounded-full flex items-center justify-center mb-6 shadow-sm border-2 border-orange-100">
+                    <i data-lucide="layers" class="w-10 h-10 text-orange-500"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-800 mb-2">Welcome Back</h2>
+                <p class="text-sm text-gray-400 mb-8">Login to Salim Enterprise</p>
+                <form onsubmit="handleLogin(event)" class="w-full flex flex-col gap-4">
+                    <input type="email" id="login-email" required placeholder="Email Address" class="w-full bg-gray-50 border border-gray-200 text-gray-800 text-sm rounded-xl px-4 py-3.5 focus:outline-none focus:border-orange-500 transition-all">
+                    <input type="password" id="login-pass" required placeholder="Password" class="w-full bg-gray-50 border border-gray-200 text-gray-800 text-sm rounded-xl px-4 py-3.5 focus:outline-none focus:border-orange-500 transition-all">
+                    <button type="submit" id="btn-login-submit" class="w-full bg-orange-500 text-white font-semibold rounded-xl py-3.5 mt-2 active:scale-95 transition-transform shadow-sm">Login</button>
+                </form>
+                <p class="mt-6 text-sm text-gray-500">Don't have an account? <button onclick="toggleAuthView('signup')" type="button" class="text-orange-500 font-semibold">Signup</button></p>
+            </div>
+
+            <div id="auth-signup-view" class="hidden w-full max-w-sm px-8 flex flex-col items-center">
+                <div class="w-16 h-16 bg-orange-50 rounded-full flex items-center justify-center mb-4 border-2 border-orange-100">
+                    <i data-lucide="user-plus" class="w-8 h-8 text-orange-500"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-800 mb-1">Create Account</h2>
+                <p class="text-xs text-gray-400 mb-6">Join Salim Enterprise</p>
+                <form onsubmit="handleSignup(event)" class="w-full flex flex-col gap-3">
+                    <input type="text" id="signup-name" required placeholder="Full Name" class="w-full bg-gray-50 border border-gray-200 text-sm rounded-xl px-4 py-3 focus:border-orange-500 transition-all">
+                    <input type="email" id="signup-email" required placeholder="Email Address" class="w-full bg-gray-50 border border-gray-200 text-sm rounded-xl px-4 py-3 focus:border-orange-500 transition-all">
+                    <input type="password" id="signup-pass" required minlength="4" placeholder="Password" class="w-full bg-gray-50 border border-gray-200 text-sm rounded-xl px-4 py-3 focus:border-orange-500 transition-all">
+                    <input type="password" id="signup-pass-confirm" required minlength="4" placeholder="Confirm Password" class="w-full bg-gray-50 border border-gray-200 text-sm rounded-xl px-4 py-3 focus:border-orange-500 transition-all">
+                    <button type="submit" id="btn-signup-submit" class="w-full bg-orange-500 text-white font-semibold rounded-xl py-3.5 mt-2 active:scale-95 transition-transform">Sign Up</button>
+                </form>
+                <p class="mt-5 text-sm text-gray-500">Already have an account? <button onclick="toggleAuthView('login')" type="button" class="text-orange-500 font-semibold">Login</button></p>
+            </div>
+        </div>
+
+        <!-- Custom Alert Modal -->
+        <div id="custom-alert-modal" class="absolute inset-0 z-[300] bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center p-6 opacity-0 transition-opacity duration-300 pointer-events-none">
+            <div id="alert-modal-content" class="bg-white p-6 rounded-3xl w-full max-w-xs flex flex-col items-center transform scale-95 transition-transform duration-300 text-center shadow-xl">
+                <div id="alert-icon-container" class="w-16 h-16 rounded-full flex items-center justify-center mb-4">
+                    <i id="alert-icon" data-lucide="info" class="w-8 h-8"></i>
+                </div>
+                <h3 id="alert-title" class="font-bold text-lg text-gray-800 mb-2">Title</h3>
+                <p id="alert-message" class="text-sm text-gray-500 mb-6">Message</p>
+                <button id="alert-ok-btn" class="w-full bg-gray-800 text-white font-semibold rounded-xl py-3 active:scale-95 transition-transform">OK</button>
+            </div>
+        </div>
+
+        <!-- Delete Modal -->
+        <div id="delete-qr-modal" class="absolute inset-0 z-[200] bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center p-6 opacity-0 transition-opacity duration-300 pointer-events-none">
+            <div id="delete-modal-content" class="bg-white p-6 rounded-3xl w-full max-w-xs flex flex-col items-center transform scale-95 transition-transform duration-300 text-center shadow-xl">
+                <div class="w-16 h-16 rounded-full flex items-center justify-center mb-4 bg-red-50 text-red-500">
+                    <i data-lucide="alert-triangle" class="w-8 h-8"></i>
+                </div>
+                <h3 class="font-bold text-lg text-gray-800 mb-2">Delete QR Code</h3>
+                <p class="text-sm text-gray-500 mb-4">Enter your password to confirm deletion.</p>
+                <input type="password" id="delete-qr-pass" placeholder="Your Password" class="w-full bg-gray-50 border border-gray-200 text-sm rounded-xl px-4 py-3 focus:border-red-500 transition-all mb-4">
+                <div class="flex gap-2 w-full">
+                    <button onclick="closeDeleteModal()" class="flex-1 bg-gray-200 text-gray-700 font-semibold rounded-xl py-3 active:scale-95 transition-transform">Cancel</button>
+                    <button onclick="confirmDeleteQR()" class="flex-1 bg-red-500 text-white font-semibold rounded-xl py-3 active:scale-95 transition-transform">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+
+        // Utilities
+        function safeParseDate(dateInput) {
+            if (!dateInput) return new Date();
+            let d = new Date(dateInput);
+            if (!isNaN(d.getTime())) return d;
+            if (typeof dateInput === 'string') {
+                let cleaned = dateInput.replace(/,/g, '').replace(/-/g, '/');
+                d = new Date(cleaned);
+                if (!isNaN(d.getTime())) return d;
+            }
+            return new Date();
+        }
+
+        // --- Google Sheets Integration ---
+        const GOOGLE_SHEET_WEB_APP_URLS = [
+            "https://script.google.com/macros/s/AKfycbzdcYFwpTjD79bgvDlH5wjAdnHQ7ePcP-JFuxEXsPnFLFb--LZwQiUTia6obW9c8vybCg/exec"
+        ];
+        let currentUrlIndex = 0;
+
+        async function apiCall(action, payload) {
+            if (!GOOGLE_SHEET_WEB_APP_URLS.length) return { status: 'error', message: 'No URL' };
+            
+            let attempts = 0;
+            while (attempts < GOOGLE_SHEET_WEB_APP_URLS.length) {
+                const currentUrl = GOOGLE_SHEET_WEB_APP_URLS[currentUrlIndex];
+                try {
+                    const response = await fetch(currentUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify({ action: action, data: payload }),
+                        redirect: 'follow'
+                    });
+                    if (!response.ok) throw new Error('HTTP Error');
+                    return await response.json();
+                } catch (err) {
+                    attempts++;
+                    currentUrlIndex = (currentUrlIndex + 1) % GOOGLE_SHEET_WEB_APP_URLS.length;
+                    if (attempts >= GOOGLE_SHEET_WEB_APP_URLS.length) {
+                        return { status: 'error', message: 'Sync failed.' };
+                    }
+                }
+            }
+        }
+
+        function syncToGoogleSheet(action, payload) {
+            apiCall(action, payload);
+        }
+
+        async function syncInitialData() {
+            const res = await apiCall('get_all_data', {});
+            if (res && res.status === 'success') {
+                if(res.users) {
+                    localStorage.setItem('xyz_users', JSON.stringify(res.users));
+                    const sessionStr = localStorage.getItem('xyz_session');
+                    if (sessionStr) {
+                        const session = JSON.parse(sessionStr);
+                        const updatedUser = res.users.find(u => u.id === session.id);
+                        
+                        if (updatedUser) {
+                            if (updatedUser.status === 'blocked') {
+                                logout();
+                                showCustomAlert('Account Blocked', 'Admin apnake block koreche. Apni logged out hoye gechen.', 'ban', 'text-red-500', 'bg-red-50');
+                                return;
+                            } else if (session.role !== updatedUser.role) {
+                                localStorage.setItem('xyz_session', JSON.stringify(updatedUser));
+                                checkAuth();
+                                showCustomAlert('Role Updated', 'Your account privileges have been updated to ' + updatedUser.role.toUpperCase() + ' by an administrator.', 'shield', 'text-blue-500', 'bg-blue-50');
+                            } else {
+                                localStorage.setItem('xyz_session', JSON.stringify(updatedUser));
+                            }
+                        }
+                    }
+                }
+                
+                let fetchedLogs = [];
+                if(res.logs) fetchedLogs = res.logs.reverse();
+                
+                if(res.qrs) {
+                    let fetchedQRs = res.qrs.reverse();
+                    const existingQrIds = new Set(fetchedQRs.map(q => q.id));
+                    fetchedLogs = fetchedLogs.filter(log => existingQrIds.has(log.qrId));
+                    localStorage.setItem('xyz_scan_logs', JSON.stringify(fetchedLogs));
+                    
+                    fetchedQRs.forEach(qr => {
+                        const relatedLogs = fetchedLogs.filter(log => log.qrId === qr.id);
+                        qr.scanCount = relatedLogs.length;
+                        qr.scannedByList = [...new Set(relatedLogs.map(log => log.scannedBy))];
+                    });
+                    localStorage.setItem('xyz_secure_qrs', JSON.stringify(fetchedQRs));
+                }
+                
+                renderAccounts();
+                renderQRList();
+                renderStatusLogs();
+                renderHomeDashboard();
+            }
+        }
+
+        // --- UI Navigation ---
+        function switchTab(tabId) {
+            const tabs = ['status', 'qr', 'home', 'accounts', 'scan'];
+            tabs.forEach(t => {
+                document.getElementById(`nav-${t}`).classList.toggle('active', t === tabId);
+                document.getElementById(`view-${t}`).classList.toggle('active', t === tabId);
+            });
+            if (tabId === 'scan') {
+                setTimeout(startScanner, 300);
+            } else {
+                stopScanner();
+            }
+        }
+
+        function openSidebar() {
+            document.getElementById('sidebar-overlay').classList.add('active');
+            document.getElementById('sidebar-panel').classList.add('active');
+        }
+
+        function closeSidebar() {
+            document.getElementById('sidebar-overlay').classList.remove('active');
+            document.getElementById('sidebar-panel').classList.remove('active');
+        }
+
+        // --- Auth & Access ---
+        function checkAuth() {
+            const session = localStorage.getItem('xyz_session');
+            const authOverlay = document.getElementById('auth-overlay');
+            
+            if (session) {
+                const user = JSON.parse(session);
+                authOverlay.classList.add('opacity-0');
+                setTimeout(() => authOverlay.classList.add('hidden'), 300);
+                
+                const isOwner = user.email.toLowerCase() === 'mjnoman184@gmail.com' || user.role === 'owner';
+                const isAdmin = user.role === 'admin' || isOwner;
+                
+                document.getElementById('profile-name').innerText = user.name + (isOwner ? ' (Owner)' : (isAdmin ? ' (Admin)' : ' (Staff)'));
+                document.getElementById('profile-email').innerText = user.email;
+                
+                ['nav-qr', 'nav-home', 'nav-accounts'].forEach(id => {
+                    document.getElementById(id).style.display = isAdmin ? 'flex' : 'none';
+                });
+                document.getElementById('check-mode-container').style.display = isAdmin ? 'flex' : 'none';
+                document.getElementById('status-filter-btn').style.display = isAdmin ? 'block' : 'none';
+                document.getElementById('status-refresh-btn').style.display = isAdmin ? 'none' : 'block';
+                
+                renderAccounts();
+                
+                const activeNav = document.querySelector('.nav-btn.active');
+                if (!isAdmin && (!activeNav || (activeNav.id !== 'nav-status' && activeNav.id !== 'nav-scan'))) {
+                    switchTab('status');
+                }
+            } else {
+                authOverlay.classList.remove('hidden');
+                void authOverlay.offsetWidth;
+                authOverlay.classList.remove('opacity-0');
+            }
+        }
+
+        function toggleAuthView(view) {
+            const loginView = document.getElementById('auth-login-view');
+            const signupView = document.getElementById('auth-signup-view');
+            if (view === 'signup') {
+                loginView.classList.add('hidden');
+                signupView.classList.remove('hidden');
+            } else {
+                signupView.classList.add('hidden');
+                loginView.classList.remove('hidden');
+            }
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value.trim();
+            const pass = document.getElementById('login-pass').value.trim();
+            if (!email || !pass) return;
+
+            const btn = document.getElementById('btn-login-submit');
+            const originalText = btn.innerText;
+            btn.innerText = "Verifying...";
+            btn.disabled = true;
+            
+            const res = await apiCall('login', { email, password: pass });
+            
+            btn.innerText = originalText;
+            btn.disabled = false;
+
+            if (res.status === 'success') {
+                const user = res.user;
+                if (user.status === 'pending') {
+                    showCustomAlert('Approval Pending', 'Your account is waiting for admin approval.', 'info', 'text-blue-500', 'bg-blue-50');
+                    return;
+                }
+                if (user.status === 'blocked') {
+                    showCustomAlert('Account Blocked', 'Your access has been suspended.', 'ban', 'text-red-500', 'bg-red-50');
+                    return;
+                }
+                localStorage.setItem('xyz_session', JSON.stringify(user));
+                document.getElementById('login-email').value = '';
+                document.getElementById('login-pass').value = '';
+                checkAuth();
+                switchTab(user.role === 'staff' ? 'status' : 'home');
+                if(user.role !== 'staff') renderHomeDashboard();
+            } else {
+                showCustomAlert('Login Failed', res.message || 'Invalid credentials.', 'alert-circle', 'text-red-500', 'bg-red-50');
+            }
+        }
+
+        async function handleSignup(e) {
+            e.preventDefault();
+            const name = document.getElementById('signup-name').value.trim();
+            const email = document.getElementById('signup-email').value.trim();
+            const pass1 = document.getElementById('signup-pass').value;
+            const pass2 = document.getElementById('signup-pass-confirm').value;
+            
+            if (pass1 !== pass2) {
+                showCustomAlert('Error', 'Passwords do not match!', 'alert-circle', 'text-red-500', 'bg-red-50');
+                return;
+            }
+            
+            const btn = document.getElementById('btn-signup-submit');
+            const originalText = btn.innerText;
+            btn.innerText = "Creating...";
+            btn.disabled = true;
+
+            const newUser = { id: 'u-' + Date.now(), name, email, password: pass1, role: 'staff', status: 'pending' };
+            const res = await apiCall('signup', newUser);
+            
+            btn.innerText = originalText;
+            btn.disabled = false;
+
+            if (res.status === 'success') {
+                let users = JSON.parse(localStorage.getItem('xyz_users') || '[]');
+                users.push(newUser);
+                localStorage.setItem('xyz_users', JSON.stringify(users));
+                e.target.reset();
+                showCustomAlert('Signup Successful', 'Wait for admin approval.', 'check-circle', 'text-green-500', 'bg-green-50', () => toggleAuthView('login'));
+            } else {
+                showCustomAlert('Signup Failed', res.message || 'Error occurred.', 'alert-circle', 'text-red-500', 'bg-red-50');
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('xyz_session');
+            closeSidebar();
+            switchTab('home');
+            checkAuth();
+        }
+
+        // --- Custom Alert ---
+        function showCustomAlert(title, message, iconName = 'info', iconColor = 'text-blue-500', iconBg = 'bg-blue-50', onOkCallback = null) {
+            const modal = document.getElementById('custom-alert-modal');
+            const content = document.getElementById('alert-modal-content');
+            document.getElementById('alert-title').innerText = title;
+            document.getElementById('alert-message').innerText = message;
+            document.getElementById('alert-icon-container').className = `w-16 h-16 rounded-full flex items-center justify-center mb-4 ${iconBg} ${iconColor}`;
+            document.getElementById('alert-icon').setAttribute('data-lucide', iconName);
+            document.getElementById('alert-ok-btn').onclick = () => {
+                closeCustomAlert();
+                if (onOkCallback) onOkCallback();
+            };
+            lucide.createIcons();
+            modal.classList.remove('pointer-events-none');
+            void modal.offsetWidth;
+            modal.classList.remove('opacity-0');
+            content.classList.remove('scale-95');
+        }
+
+        function closeCustomAlert() {
+            const modal = document.getElementById('custom-alert-modal');
+            const content = document.getElementById('alert-modal-content');
+            if (modal) {
+                modal.classList.add('opacity-0');
+                content.classList.add('scale-95');
+                setTimeout(() => modal.classList.add('pointer-events-none'), 300);
+            }
+        }
+
+        // --- Logic implementations ---
+        function renderHomeDashboard() {
+            const qrs = JSON.parse(localStorage.getItem('xyz_secure_qrs') || '[]');
+            const logs = JSON.parse(localStorage.getItem('xyz_scan_logs') || '[]');
+            const totalQRs = qrs.length;
+            const scannedQRs = qrs.filter(qr => qr.scanCount > 0).length;
+            const unusedQRs = totalQRs - scannedQRs;
+
+            document.getElementById('home-stats-grid').innerHTML = `
+                <div class="bg-gray-50 border py-3 px-1 rounded-2xl text-center"><span class="text-xl font-bold">${totalQRs}</span><br><span class="text-[10px] text-gray-500">Total QRs</span></div>
+                <div class="bg-green-50 border-green-200 py-3 px-1 rounded-2xl text-center"><span class="text-xl font-bold text-green-600">${scannedQRs}</span><br><span class="text-[10px] text-green-700">Used QRs</span></div>
+                <div class="bg-orange-50 border-orange-200 py-3 px-1 rounded-2xl text-center"><span class="text-xl font-bold text-orange-600">${unusedQRs}</span><br><span class="text-[10px] text-orange-700">Unused</span></div>
+            `;
+
+            const staffStats = {};
+            logs.forEach(log => {
+                if(!staffStats[log.scannedBy]) staffStats[log.scannedBy] = { newScan: 0, usedScan: 0 };
+                const isFirst = log.isFirstScan === true || log.isFirstScan === 'true' || log.isFirstScan === 'TRUE';
+                isFirst ? staffStats[log.scannedBy].newScan++ : staffStats[log.scannedBy].usedScan++;
+            });
+
+            const staffContainer = document.getElementById('home-staff-stats');
+            const staffKeys = Object.keys(staffStats);
+            staffContainer.innerHTML = staffKeys.length ? staffKeys.map(user => `
+                <div class="bg-white border p-3 rounded-xl flex justify-between items-center text-sm shadow-sm">
+                    <span class="font-semibold truncate max-w-[120px]">${user}</span>
+                    <div class="flex gap-1.5"><span class="text-[10px] bg-green-50 text-green-700 px-2 py-1 rounded">New: ${staffStats[user].newScan}</span><span class="text-[10px] bg-red-50 text-red-700 px-2 py-1 rounded">Used: ${staffStats[user].usedScan}</span></div>
+                </div>
+            `).join('') : '<p class="text-xs text-gray-400">No records</p>';
+
+            const activityContainer = document.getElementById('home-recent-activity');
+            activityContainer.innerHTML = logs.slice(0, 5).map(log => {
+                const timeString = safeParseDate(log.scannedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                return `<div class="flex items-center gap-3 bg-gray-50 border p-3 rounded-xl text-xs"><div class="w-2 h-2 rounded-full ${log.isFirstScan ? 'bg-green-500' : 'bg-red-500'}"></div><div class="flex-1 truncate"><p class="font-semibold truncate">${log.qrTitle}</p><p class="text-[10px] text-gray-400">By ${log.scannedBy}</p></div><span class="text-[10px] text-gray-400 border px-1.5 py-0.5 bg-white rounded">${timeString}</span></div>`;
+            }).join('') || '<p class="text-xs text-gray-400">No activity</p>';
+        }
+
+        function renderAccounts() {
+            const users = JSON.parse(localStorage.getItem('xyz_users') || '[]');
+            const container = document.getElementById('accounts-container');
+            const pending = users.filter(u => u.status === 'pending');
+            const owners = users.filter(u => (u.role === 'owner' || u.email.toLowerCase() === 'mjnoman184@gmail.com') && u.status === 'active');
+            const admins = users.filter(u => u.role === 'admin' && u.email.toLowerCase() !== 'mjnoman184@gmail.com' && u.status === 'active');
+            const staffs = users.filter(u => u.role === 'staff' && u.email.toLowerCase() !== 'mjnoman184@gmail.com' && u.status === 'active');
+            const blocked = users.filter(u => u.status === 'blocked');
+
+            let html = '';
+            if (pending.length) html += `<div class="mb-2"><h3 class="text-sm font-semibold mb-3">Pending (${pending.length})</h3>${pending.map(userCardHTML).join('')}</div>`;
+            if (owners.length) html += `<div class="mb-2"><h3 class="text-sm font-semibold mb-3">Owners (${owners.length})</h3>${owners.map(userCardHTML).join('')}</div>`;
+            html += `<div class="mb-2"><h3 class="text-sm font-semibold mb-3">Admins (${admins.length})</h3>${admins.map(userCardHTML).join('') || '<p class="text-xs text-gray-400">No admins</p>'}</div>`;
+            html += `<div class="mb-2"><h3 class="text-sm font-semibold mb-3">Staff (${staffs.length})</h3>${staffs.map(userCardHTML).join('') || '<p class="text-xs text-gray-400">No staff</p>'}</div>`;
+            if (blocked.length) html += `<div class="mb-2"><h3 class="text-sm font-semibold mb-3">Blocked (${blocked.length})</h3>${blocked.map(userCardHTML).join('')}</div>`;
+            container.innerHTML = html;
+            lucide.createIcons();
+        }
+
+        function userCardHTML(user) {
+            let actionButtons = '';
+            const sessionData = JSON.parse(localStorage.getItem('xyz_session') || '{}');
+            const isPrimaryOwnerSession = sessionData.email?.toLowerCase() === 'mjnoman184@gmail.com';
+            const isAnyOwnerSession = isPrimaryOwnerSession || sessionData.role === 'owner';
+            const isTargetPrimaryOwner = user.email.toLowerCase() === 'mjnoman184@gmail.com';
+            const isTargetOwner = user.role === 'owner' || isTargetPrimaryOwner;
+            
+            if (isAnyOwnerSession || sessionData.role === 'admin') {
+                if (!isTargetPrimaryOwner && (!isTargetOwner || isPrimaryOwnerSession)) {
+                    if (user.status === 'pending') {
+                        actionButtons = `<button onclick="updateUser('${user.id}', 'staff', 'active')" class="p-1.5 bg-green-50 text-green-600 rounded"><i data-lucide="check" class="w-4 h-4"></i></button><button onclick="updateUser('${user.id}', 'pending', 'blocked')" class="p-1.5 bg-red-50 text-red-600 rounded"><i data-lucide="x" class="w-4 h-4"></i></button>`;
+                    } else if (user.status === 'blocked') {
+                        actionButtons = `<button onclick="updateUser('${user.id}', '${user.role}', 'active')" class="p-1.5 bg-green-50 text-green-600 rounded"><i data-lucide="unlock" class="w-4 h-4"></i></button>`;
+                    } else {
+                        if (user.role === 'staff') {
+                            actionButtons += `<button onclick="updateUser('${user.id}', 'admin', 'active')" class="p-1.5 bg-purple-50 text-purple-600 rounded mr-1"><i data-lucide="shield" class="w-4 h-4"></i></button>`;
+                            if(isPrimaryOwnerSession) actionButtons += `<button onclick="updateUser('${user.id}', 'owner', 'active')" class="p-1.5 bg-yellow-50 text-yellow-600 rounded mr-1"><i data-lucide="star" class="w-4 h-4"></i></button>`;
+                        } else if (user.role === 'admin') {
+                            actionButtons += `<button onclick="updateUser('${user.id}', 'staff', 'active')" class="p-1.5 bg-blue-50 text-blue-600 rounded mr-1"><i data-lucide="user-minus" class="w-4 h-4"></i></button>`;
+                            if(isPrimaryOwnerSession) actionButtons += `<button onclick="updateUser('${user.id}', 'owner', 'active')" class="p-1.5 bg-yellow-50 text-yellow-600 rounded mr-1"><i data-lucide="star" class="w-4 h-4"></i></button>`;
+                        } else if (user.role === 'owner' && isPrimaryOwnerSession) {
+                            actionButtons += `<button onclick="updateUser('${user.id}', 'admin', 'active')" class="p-1.5 bg-purple-50 text-purple-600 rounded mr-1"><i data-lucide="shield" class="w-4 h-4"></i></button><button onclick="updateUser('${user.id}', 'staff', 'active')" class="p-1.5 bg-blue-50 text-blue-600 rounded mr-1"><i data-lucide="user-minus" class="w-4 h-4"></i></button>`;
+                        }
+                        actionButtons += `<button onclick="updateUser('${user.id}', '${user.role}', 'blocked')" class="p-1.5 bg-red-50 text-red-600 rounded"><i data-lucide="ban" class="w-4 h-4"></i></button>`;
+                    }
+                }
+            }
+            return `<div class="bg-gray-50 border p-3 rounded-xl flex justify-between items-center mb-3 shadow-sm"><div class="flex items-center gap-3 overflow-hidden"><div class="w-10 h-10 bg-white rounded-full flex items-center justify-center shrink-0 border"><i data-lucide="${isTargetOwner ? 'star' : 'user'}" class="w-5 h-5 ${isTargetOwner?'text-yellow-500':'text-blue-500'}"></i></div><div class="overflow-hidden"><p class="font-semibold text-sm truncate">${user.name}</p><p class="text-[10px] text-gray-400 truncate">${user.email}</p></div></div><div class="flex items-center shrink-0 ml-2">${actionButtons}</div></div>`;
+        }
+
+        function updateUser(id, role, status) {
+            let users = JSON.parse(localStorage.getItem('xyz_users') || '[]');
+            const index = users.findIndex(u => u.id === id);
+            if (index !== -1) {
+                users[index].role = role; users[index].status = status;
+                localStorage.setItem('xyz_users', JSON.stringify(users));
+                renderAccounts();
+                syncToGoogleSheet('update_user', { id, role, status });
+            }
+        }
+
+        // --- QR Features ---
+        function toggleBulkMode() {
+            const isBulk = document.getElementById('bulk-mode-toggle').checked;
+            document.getElementById('single-qr-section').style.display = isBulk ? 'none' : 'flex';
+            document.getElementById('bulk-qr-section').style.display = isBulk ? 'flex' : 'none';
+        }
+
+        function generateSecureQR() {
+            const val = document.getElementById('qr-input-text').value.trim();
+            if (!val) return;
+            createQRAndSync([{ originalText: val, title: val }]);
+            document.getElementById('qr-input-text').value = '';
+        }
+
+        function generateBulkSecureQR() {
+            const tpl = document.getElementById('qr-bulk-template').value.trim();
+            const vals = document.getElementById('qr-bulk-values').value.trim().split('\n').filter(v=>v);
+            if (!tpl || !vals.length) return;
+            const items = vals.map(v => ({ originalText: tpl.replace(/{CODE}/g, v), title: v }));
+            createQRAndSync(items, true);
+            document.getElementById('qr-bulk-values').value = '';
+        }
+
+        function createQRAndSync(items, isBulk=false) {
+            let qrs = JSON.parse(localStorage.getItem('xyz_secure_qrs') || '[]');
+            const newQRs = items.map(item => ({
+                id: 'SEPRISE-' + (Math.floor(Math.random() * 9000000000) + 1000000000),
+                originalText: item.originalText, title: item.title, createdAt: Date.now(), scanCount: 0, scannedByList: []
+            }));
+            qrs = [...newQRs.reverse(), ...qrs];
+            localStorage.setItem('xyz_secure_qrs', JSON.stringify(qrs));
+            syncToGoogleSheet(isBulk ? 'add_bulk_qrs' : 'add_single_qr', isBulk ? newQRs : newQRs[0]);
+            renderQRList(); renderHomeDashboard();
+        }
+
+        function toggleDateFilter() { document.getElementById('date-filter-panel').classList.toggle('hidden'); }
+        function applyDateFilter() { renderQRList(); }
+        function clearDateFilter() { document.getElementById('filter-start-date').value = ''; document.getElementById('filter-end-date').value = ''; renderQRList(); toggleDateFilter(); }
+
+        function renderQRList() {
+            let qrs = JSON.parse(localStorage.getItem('xyz_secure_qrs') || '[]');
+            const startStr = document.getElementById('filter-start-date')?.value;
+            const endStr = document.getElementById('filter-end-date')?.value;
+            if (startStr && endStr) {
+                const s = safeParseDate(startStr).setHours(0,0,0,0), e = safeParseDate(endStr).setHours(23,59,59,999);
+                qrs = qrs.filter(qr => { const t = safeParseDate(qr.createdAt).getTime(); return t>=s && t<=e; });
+            }
+            
+            const session = JSON.parse(localStorage.getItem('xyz_session') || '{}');
+            const isOwner = session.email?.toLowerCase() === 'mjnoman184@gmail.com' || session.role === 'owner';
+
+            document.getElementById('qr-list-container').innerHTML = qrs.length ? qrs.map(qr => `
+                <div class="bg-gray-50 border p-4 rounded-2xl flex justify-between items-start mb-3">
+                    <div class="overflow-hidden pr-3 flex-1">
+                        <p class="font-semibold truncate text-sm">${qr.title || qr.originalText}</p>
+                        <p class="text-[10px] text-gray-400 mt-1">ID: ${qr.id}</p>
+                        <p class="text-[10px] text-gray-400"><i data-lucide="calendar" class="w-3 h-3 inline"></i> ${safeParseDate(qr.createdAt).toLocaleDateString()}</p>
+                    </div>
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        <span class="text-[10px] font-bold px-2 py-1 bg-gray-200 rounded-lg">Scans: ${qr.scanCount||0}</span>
+                        <button onclick="previewSecureQR('${qr.id}')" class="bg-orange-50 text-orange-500 p-2 rounded-xl"><i data-lucide="eye" class="w-5 h-5"></i></button>
+                        ${isOwner ? `<button onclick="promptDeleteQR('${qr.id}')" class="bg-red-50 text-red-500 p-2 rounded-xl"><i data-lucide="trash-2" class="w-5 h-5"></i></button>` : ''}
+                    </div>
+                </div>
+            `).join('') : '<p class="text-xs text-gray-400 text-center mt-4">No QR codes found.</p>';
+            lucide.createIcons();
+        }
+
+        let qrToDeleteId = null;
+        function promptDeleteQR(id) {
+            qrToDeleteId = id; document.getElementById('delete-qr-pass').value = '';
+            const modal = document.getElementById('delete-qr-modal');
+            modal.classList.remove('pointer-events-none', 'opacity-0');
+            document.getElementById('delete-modal-content').classList.remove('scale-95');
+        }
+        function closeDeleteModal() {
+            const modal = document.getElementById('delete-qr-modal');
+            modal.classList.add('opacity-0');
+            document.getElementById('delete-modal-content').classList.add('scale-95');
+            setTimeout(() => modal.classList.add('pointer-events-none'), 300);
+        }
+        function confirmDeleteQR() {
+            const pass = document.getElementById('delete-qr-pass').value;
+            const session = JSON.parse(localStorage.getItem('xyz_session'));
+            if (pass !== session.password) return showCustomAlert('Error', 'Incorrect password!', 'alert-circle', 'text-red-500', 'bg-red-50');
+            
+            let qrs = JSON.parse(localStorage.getItem('xyz_secure_qrs') || '[]');
+            localStorage.setItem('xyz_secure_qrs', JSON.stringify(qrs.filter(q => q.id !== qrToDeleteId)));
+            let logs = JSON.parse(localStorage.getItem('xyz_scan_logs') || '[]');
+            localStorage.setItem('xyz_scan_logs', JSON.stringify(logs.filter(log => log.qrId !== qrToDeleteId)));
+            
+            syncToGoogleSheet('delete_qr', { id: qrToDeleteId });
+            closeDeleteModal(); renderQRList(); renderStatusLogs(); renderHomeDashboard();
+            showCustomAlert('Deleted', 'QR securely deleted.', 'check-circle', 'text-green-500', 'bg-green-50');
+        }
+
+        function previewSecureQR(id) {
+            let qrData = JSON.parse(localStorage.getItem('xyz_secure_qrs') || '[]').find(q=>q.id===id);
+            const title = qrData ? (qrData.title||id) : id;
+            try {
+                const qr = new QRious({ value: `This QR use Only Salim Enterprise Apps-So Please Don't Scan Other Apps. Your Error ID-payload:${id}`, size: 1024, level: 'H' });
+                showQRModal(qr.toDataURL(), title);
+            } catch(e) {}
+        }
+        function showQRModal(url, title) {
+            let modal = document.getElementById('qr-preview-modal');
+            if(!modal) {
+                modal = document.createElement('div'); modal.id = 'qr-preview-modal';
+                modal.className = 'absolute inset-0 z-[100] bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center p-6 opacity-0 transition-opacity duration-300 pointer-events-none';
+                document.querySelector('.app-container').appendChild(modal);
+            }
+            modal.innerHTML = `<div class="bg-white p-5 rounded-3xl w-full max-w-xs text-center shadow-xl transform scale-95 transition-transform" id="qr-modal-content"><h3 class="font-bold mb-3 truncate">${title}</h3><img src="${url}" class="w-full rounded mb-4 border"><button onclick="executeDownload('${url}','${title.replace(/'/g, "\\'")}')" class="w-full bg-orange-500 text-white py-3 rounded-xl mb-2">Download</button><button onclick="closeQRModal()" class="w-full bg-gray-200 py-3 rounded-xl">Close</button></div>`;
+            modal.classList.remove('pointer-events-none', 'opacity-0');
+            setTimeout(()=>document.getElementById('qr-modal-content').classList.remove('scale-95'), 10);
+        }
+        function closeQRModal() {
+            const m = document.getElementById('qr-preview-modal');
+            if(m) { m.classList.add('opacity-0'); document.getElementById('qr-modal-content').classList.add('scale-95'); setTimeout(()=>m.classList.add('pointer-events-none'), 300); }
+        }
+        function executeDownload(url, filename) {
+            const link = document.createElement('a'); link.href = url; link.download = filename+'.png'; link.click();
+        }
+
+        // --- Status Logs ---
+        function toggleStatusFilter() { document.getElementById('status-filter-panel').classList.toggle('hidden'); }
+        function applyStatusFilter() { renderStatusLogs(); }
+        function clearStatusFilter() { document.getElementById('filter-user-name').value = ''; renderStatusLogs(); toggleStatusFilter(); }
+        async function manualRefreshStatus() {
+            const icon = document.querySelector('#status-refresh-btn i');
+            if(icon) icon.classList.add('animate-spin');
+            await syncInitialData();
+            if(icon) icon.classList.remove('animate-spin');
+        }
+        function renderStatusLogs() {
+            let logs = JSON.parse(localStorage.getItem('xyz_scan_logs') || '[]');
+            const session = JSON.parse(localStorage.getItem('xyz_session') || '{}');
+            if(session.role === 'staff') logs = logs.filter(l => l.scannedBy === session.name);
+            const userFilter = document.getElementById('filter-user-name')?.value.trim().toLowerCase();
+            if(userFilter) logs = logs.filter(l => l.scannedBy?.toLowerCase().includes(userFilter));
+            
+            document.getElementById('status-log-container').innerHTML = logs.length ? logs.map(log => {
+                const isFirst = log.isFirstScan === true || log.isFirstScan === 'true' || log.isFirstScan === 'TRUE';
+                const lightColor = isFirst ? 'bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.8)]' : 'bg-red-500';
+                return `<div class="bg-gray-50 border p-4 rounded-2xl flex flex-col gap-1.5"><div class="flex justify-between items-center"><span class="font-bold text-sm"><i data-lucide="user" class="w-3.5 h-3.5 text-blue-500 inline"></i> ${log.scannedBy} <span class="w-2 h-2 rounded-full ${lightColor} inline-block ml-1 animate-pulse"></span></span><span class="text-[10px] text-gray-400 border px-2 py-0.5 rounded-full bg-white">${safeParseDate(log.scannedAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span></div><div class="bg-white border rounded p-2 mt-1"><p class="text-xs font-semibold truncate">${session.role === 'staff' ? log.qrId : log.qrTitle}</p>${session.role === 'staff' ? '' : `<p class="text-[10px] text-gray-400 font-mono mt-0.5">ID: ${log.qrId}</p>`}</div></div>`;
+            }).join('') : '<p class="text-center text-xs text-gray-400 mt-4">No scan activity found.</p>';
+            lucide.createIcons();
+        }
+
+        // --- Scanner Features ---
+        let html5QrcodeScanner = null;
+        let isCheckMode = false;
+        function toggleCheckMode() { isCheckMode = document.getElementById('check-mode-toggle').checked; }
+
+        function startScanner() {
+            document.getElementById('scan-result-card').classList.add('hidden');
+            document.getElementById('scanner-container').classList.remove('hidden');
+            const loader = document.getElementById('scanner-loader');
+            if(loader) loader.style.display = 'flex';
+            if (!html5QrcodeScanner) html5QrcodeScanner = new Html5Qrcode("reader");
+            html5QrcodeScanner.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 250 } }, onScanSuccess, ()=>{})
+                .then(() => { if(loader) loader.style.display = 'none'; })
+                .catch(err => { if(loader) loader.innerHTML = '<span class="text-xs text-red-400">Camera permission denied</span>'; });
+        }
+
+        function stopScanner() {
+            if (html5QrcodeScanner && html5QrcodeScanner.isScanning) {
+                html5QrcodeScanner.stop().catch(e=>console.error(e));
+            }
+        }
+
+        function resetScanner() { startScanner(); }
+
+        function onScanSuccess(decodedText) {
+            stopScanner();
+            document.getElementById('scanner-container').classList.add('hidden');
+            document.getElementById('scan-result-card').classList.remove('hidden');
+            
+            const prefixes = ["This QR use Only Salim Enterprise Apps-So Please Don't Scan Other Apps. Your Error ID-payload:", "seprise-secure-payload:", "xyz-secure-payload:"];
+            let qrId = null;
+            for(let p of prefixes) if(decodedText.startsWith(p)) qrId = decodedText.substring(p.length);
+            
+            const iconCont = document.getElementById('result-icon-container'), icon = document.getElementById('result-icon');
+            const title = document.getElementById('result-title'), text = document.getElementById('result-text');
+
+            if(qrId) {
+                let qrs = JSON.parse(localStorage.getItem('xyz_secure_qrs') || '[]');
+                const qrIndex = qrs.findIndex(q => q.id === qrId);
+                if(qrIndex !== -1) {
+                    const qrData = qrs[qrIndex]; text.innerText = qrData.originalText;
+                    const session = JSON.parse(localStorage.getItem('xyz_session'));
+                    const userStr = session ? session.name : 'Unknown';
+                    
+                    if(isCheckMode) {
+                        iconCont.className = "w-14 h-14 rounded-full flex items-center justify-center mb-3 bg-blue-100 text-blue-600";
+                        icon.setAttribute('data-lucide', 'eye'); title.innerText = "Check Mode OK"; title.className = "font-bold text-lg mb-1 text-blue-600";
+                    } else {
+                        const isFirst = !(qrData.scanCount > 0);
+                        iconCont.className = `w-14 h-14 rounded-full flex items-center justify-center mb-3 ${isFirst?'bg-green-100 text-green-600':'bg-yellow-100 text-yellow-600'}`;
+                        icon.setAttribute('data-lucide', isFirst ? 'check-circle-2' : 'alert-triangle');
+                        title.innerText = isFirst ? "Scan Success" : "Already Scanned";
+                        title.className = `font-bold text-lg mb-1 ${isFirst?'text-green-600':'text-yellow-600'}`;
+
+                        let slist = qrs[qrIndex].scannedByList || [];
+                        if(!Array.isArray(slist)) slist = typeof slist==='string' && slist ? slist.split(',') : [];
+                        if(!slist.includes(userStr)) slist.push(userStr);
+                        qrs[qrIndex].scannedByList = slist; qrs[qrIndex].scanCount = (qrs[qrIndex].scanCount||0)+1;
+                        localStorage.setItem('xyz_secure_qrs', JSON.stringify(qrs));
+                        
+                        const newLog = { id: 'log-'+Date.now(), qrId: qrData.id, qrTitle: qrData.title||qrData.originalText, scannedBy: userStr, scannedAt: Date.now(), isFirstScan: isFirst };
+                        let logs = JSON.parse(localStorage.getItem('xyz_scan_logs') || '[]'); logs.unshift(newLog);
+                        localStorage.setItem('xyz_scan_logs', JSON.stringify(logs));
+                        syncToGoogleSheet('add_scan_log', newLog);
+                        
+                        renderQRList(); renderStatusLogs(); renderHomeDashboard();
+                        const isAnyOwner = session.email?.toLowerCase()==='mjnoman184@gmail.com' || session.role==='owner';
+                        if(session.role !== 'admin' && !isAnyOwner) setTimeout(syncInitialData, 1000);
+                    }
+                } else {
+                    setupErrorResult(iconCont, icon, title, text, "QR not found in database.");
+                }
+            } else {
+                setupErrorResult(iconCont, icon, title, text, "Invalid or unrecognized QR Code.");
+            }
+            lucide.createIcons();
+        }
+
+        function setupErrorResult(cont, icon, title, text, msg) {
+            cont.className = "w-14 h-14 rounded-full flex items-center justify-center mb-3 bg-red-100 text-red-600";
+            icon.setAttribute('data-lucide', 'x-circle'); title.innerText = "Invalid QR"; title.className = "font-bold text-lg mb-1 text-red-600"; text.innerText = msg;
+        }
+
+        // --- Init ---
+        setInterval(() => {
+            const session = JSON.parse(localStorage.getItem('xyz_session') || '{}');
+            const isAnyOwner = session.email?.toLowerCase() === 'mjnoman184@gmail.com' || session.role === 'owner';
+            if (session.role === 'admin' || isAnyOwner) syncInitialData();
+        }, 10000);
+
+        syncInitialData();
+        checkAuth();
+
+        // --- PWA ---
+        const appIconSVG = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23FF6B00'/%3E%3Ctext x='50' y='50' font-family='Arial' font-weight='bold' font-size='28' fill='white' text-anchor='middle' dominant-baseline='middle'%3ESE%3C/text%3E%3C/svg%3E";
+        const manifest = { "name": "Salim Enterprise", "short_name": "SE App", "start_url": window.location.href, "display": "standalone", "background_color": "#ffffff", "theme_color": "#FF6B00", "icons": [{ "src": appIconSVG, "sizes": "192x192", "type": "image/svg+xml" }, { "src": appIconSVG, "sizes": "512x512", "type": "image/svg+xml" }] };
+        const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' });
+        document.getElementById('manifest-link').href = URL.createObjectURL(manifestBlob);
+        const appleIcon = document.createElement('link'); appleIcon.rel = 'apple-touch-icon'; appleIcon.href = appIconSVG; document.head.appendChild(appleIcon);
+    </script>
+</body>
+</html>
