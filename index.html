@@ -483,6 +483,54 @@
             return new Date();
         }
 
+        // --- IndexedDB Wrapper ---
+        const DB_NAME = 'SalimEnterpriseDB';
+        const DB_VERSION = 1;
+
+        const dbPromise = new Promise((resolve, reject) => {
+            const request = indexedDB.open(DB_NAME, DB_VERSION);
+            request.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains('store')) {
+                    db.createObjectStore('store');
+                }
+            };
+            request.onsuccess = (e) => resolve(e.target.result);
+            request.onerror = (e) => reject(e.target.error);
+        });
+
+        const localDB = {
+            async getItem(key) {
+                try {
+                    const db = await dbPromise;
+                    return new Promise((resolve, reject) => {
+                        const tx = db.transaction('store', 'readonly');
+                        const store = tx.objectStore('store');
+                        const request = store.get(key);
+                        request.onsuccess = () => resolve(request.result !== undefined ? request.result : null);
+                        request.onerror = () => reject(request.error);
+                    });
+                } catch (e) {
+                    console.error("IndexedDB Error:", e);
+                    return null;
+                }
+            },
+            async setItem(key, value) {
+                try {
+                    const db = await dbPromise;
+                    return new Promise((resolve, reject) => {
+                        const tx = db.transaction('store', 'readwrite');
+                        const store = tx.objectStore('store');
+                        const request = store.put(value, key);
+                        request.onsuccess = () => resolve();
+                        request.onerror = () => reject(request.error);
+                    });
+                } catch (e) {
+                    console.error("IndexedDB Error:", e);
+                }
+            }
+        };
+
         // --- Google Sheets Integration ---
         const GOOGLE_SHEET_WEB_APP_URLS = [
             "https://script.google.com/macros/s/AKfycbzdcYFwpTjD79bgvDlH5wjAdnHQ7ePcP-JFuxEXsPnFLFb--LZwQiUTia6obW9c8vybCg/exec",
@@ -523,7 +571,7 @@
             const res = await apiCall('get_all_data', {});
             if (res && res.status === 'success') {
                 if(res.users) {
-                    localStorage.setItem('xyz_users', JSON.stringify(res.users));
+                    await localDB.setItem('xyz_users', JSON.stringify(res.users));
                     const sessionStr = localStorage.getItem('xyz_session');
                     if (sessionStr) {
                         const session = JSON.parse(sessionStr);
@@ -552,14 +600,14 @@
                     let fetchedQRs = res.qrs.reverse();
                     const existingQrIds = new Set(fetchedQRs.map(q => q.id));
                     fetchedLogs = fetchedLogs.filter(log => existingQrIds.has(log.qrId));
-                    localStorage.setItem('xyz_scan_logs', JSON.stringify(fetchedLogs));
+                    await localDB.setItem('xyz_scan_logs', JSON.stringify(fetchedLogs));
                     
                     fetchedQRs.forEach(qr => {
                         const relatedLogs = fetchedLogs.filter(log => log.qrId === qr.id);
                         qr.scanCount = relatedLogs.length;
                         qr.scannedByList = [...new Set(relatedLogs.map(log => log.scannedBy))];
                     });
-                    localStorage.setItem('xyz_secure_qrs', JSON.stringify(fetchedQRs));
+                    await localDB.setItem('xyz_secure_qrs', JSON.stringify(fetchedQRs));
                 }
                 
                 renderAccounts();
@@ -702,9 +750,9 @@
             btn.disabled = false;
 
             if (res.status === 'success') {
-                let users = JSON.parse(localStorage.getItem('xyz_users') || '[]');
+                let users = JSON.parse(await localDB.getItem('xyz_users') || '[]');
                 users.push(newUser);
-                localStorage.setItem('xyz_users', JSON.stringify(users));
+                await localDB.setItem('xyz_users', JSON.stringify(users));
                 e.target.reset();
                 showCustomAlert('Signup Successful', 'Wait for admin approval.', 'check-circle', 'text-green-500', 'bg-green-50', () => toggleAuthView('login'));
             } else {
@@ -749,9 +797,9 @@
         }
 
         // --- Logic implementations ---
-        function renderHomeDashboard() {
-            const qrs = JSON.parse(localStorage.getItem('xyz_secure_qrs') || '[]');
-            const logs = JSON.parse(localStorage.getItem('xyz_scan_logs') || '[]');
+        async function renderHomeDashboard() {
+            const qrs = JSON.parse(await localDB.getItem('xyz_secure_qrs') || '[]');
+            const logs = JSON.parse(await localDB.getItem('xyz_scan_logs') || '[]');
             const totalQRs = qrs.length;
             const scannedQRs = qrs.filter(qr => qr.scanCount > 0).length;
             const unusedQRs = totalQRs - scannedQRs;
@@ -785,8 +833,8 @@
             }).join('') || '<p class="text-xs text-gray-400">No activity</p>';
         }
 
-        function renderAccounts() {
-            const users = JSON.parse(localStorage.getItem('xyz_users') || '[]');
+        async function renderAccounts() {
+            const users = JSON.parse(await localDB.getItem('xyz_users') || '[]');
             const container = document.getElementById('accounts-container');
             const pending = users.filter(u => u.status === 'pending');
             const owners = users.filter(u => (u.role === 'owner' || u.email.toLowerCase() === 'mjnoman184@gmail.com') && u.status === 'active');
@@ -835,12 +883,12 @@
             return `<div class="bg-gray-50 border p-3 rounded-xl flex justify-between items-center mb-3 shadow-sm"><div class="flex items-center gap-3 overflow-hidden"><div class="w-10 h-10 bg-white rounded-full flex items-center justify-center shrink-0 border"><i data-lucide="${isTargetOwner ? 'star' : 'user'}" class="w-5 h-5 ${isTargetOwner?'text-yellow-500':'text-blue-500'}"></i></div><div class="overflow-hidden"><p class="font-semibold text-sm truncate">${user.name}</p><p class="text-[10px] text-gray-400 truncate">${user.email}</p></div></div><div class="flex items-center shrink-0 ml-2">${actionButtons}</div></div>`;
         }
 
-        function updateUser(id, role, status) {
-            let users = JSON.parse(localStorage.getItem('xyz_users') || '[]');
+        async function updateUser(id, role, status) {
+            let users = JSON.parse(await localDB.getItem('xyz_users') || '[]');
             const index = users.findIndex(u => u.id === id);
             if (index !== -1) {
                 users[index].role = role; users[index].status = status;
-                localStorage.setItem('xyz_users', JSON.stringify(users));
+                await localDB.setItem('xyz_users', JSON.stringify(users));
                 renderAccounts();
                 syncToGoogleSheet('update_user', { id, role, status });
             }
@@ -869,14 +917,14 @@
             document.getElementById('qr-bulk-values').value = '';
         }
 
-        function createQRAndSync(items, isBulk=false) {
-            let qrs = JSON.parse(localStorage.getItem('xyz_secure_qrs') || '[]');
+        async function createQRAndSync(items, isBulk=false) {
+            let qrs = JSON.parse(await localDB.getItem('xyz_secure_qrs') || '[]');
             const newQRs = items.map(item => ({
                 id: 'SEPRISE-' + (Math.floor(Math.random() * 9000000000) + 1000000000),
                 originalText: item.originalText, title: item.title, createdAt: Date.now(), scanCount: 0, scannedByList: []
             }));
             qrs = [...newQRs.reverse(), ...qrs];
-            localStorage.setItem('xyz_secure_qrs', JSON.stringify(qrs));
+            await localDB.setItem('xyz_secure_qrs', JSON.stringify(qrs));
             syncToGoogleSheet(isBulk ? 'add_bulk_qrs' : 'add_single_qr', isBulk ? newQRs : newQRs[0]);
             renderQRList(); renderHomeDashboard();
         }
@@ -892,8 +940,8 @@
             toggleDateFilter(); 
         }
 
-        function renderQRList() {
-            let qrs = JSON.parse(localStorage.getItem('xyz_secure_qrs') || '[]');
+        async function renderQRList() {
+            let qrs = JSON.parse(await localDB.getItem('xyz_secure_qrs') || '[]');
             const startStr = document.getElementById('filter-start-date')?.value;
             const endStr = document.getElementById('filter-end-date')?.value;
             const sortBy = document.getElementById('filter-sort-by')?.value || 'title_asc';
@@ -954,23 +1002,24 @@
             document.getElementById('delete-modal-content').classList.add('scale-95');
             setTimeout(() => modal.classList.add('pointer-events-none'), 300);
         }
-        function confirmDeleteQR() {
+        async function confirmDeleteQR() {
             const pass = document.getElementById('delete-qr-pass').value;
             const session = JSON.parse(localStorage.getItem('xyz_session'));
             if (pass !== session.password) return showCustomAlert('Error', 'Incorrect password!', 'alert-circle', 'text-red-500', 'bg-red-50');
             
-            let qrs = JSON.parse(localStorage.getItem('xyz_secure_qrs') || '[]');
-            localStorage.setItem('xyz_secure_qrs', JSON.stringify(qrs.filter(q => q.id !== qrToDeleteId)));
-            let logs = JSON.parse(localStorage.getItem('xyz_scan_logs') || '[]');
-            localStorage.setItem('xyz_scan_logs', JSON.stringify(logs.filter(log => log.qrId !== qrToDeleteId)));
+            let qrs = JSON.parse(await localDB.getItem('xyz_secure_qrs') || '[]');
+            await localDB.setItem('xyz_secure_qrs', JSON.stringify(qrs.filter(q => q.id !== qrToDeleteId)));
+            let logs = JSON.parse(await localDB.getItem('xyz_scan_logs') || '[]');
+            await localDB.setItem('xyz_scan_logs', JSON.stringify(logs.filter(log => log.qrId !== qrToDeleteId)));
             
             syncToGoogleSheet('delete_qr', { id: qrToDeleteId });
             closeDeleteModal(); renderQRList(); renderStatusLogs(); renderHomeDashboard();
             showCustomAlert('Deleted', 'QR securely deleted.', 'check-circle', 'text-green-500', 'bg-green-50');
         }
 
-        function previewSecureQR(id) {
-            let qrData = JSON.parse(localStorage.getItem('xyz_secure_qrs') || '[]').find(q=>q.id===id);
+        async function previewSecureQR(id) {
+            let qrs = JSON.parse(await localDB.getItem('xyz_secure_qrs') || '[]');
+            let qrData = qrs.find(q=>q.id===id);
             const title = qrData ? (qrData.title||id) : id;
             try {
                 const qr = new QRious({ value: `This QR use Only Salim Enterprise Apps-So Please Don't Scan Other Apps. Your Error ID-payload:${id}`, size: 1024, level: 'H' });
@@ -1006,8 +1055,8 @@
             await syncInitialData();
             if(icon) icon.classList.remove('animate-spin');
         }
-        function renderStatusLogs() {
-            let logs = JSON.parse(localStorage.getItem('xyz_scan_logs') || '[]');
+        async function renderStatusLogs() {
+            let logs = JSON.parse(await localDB.getItem('xyz_scan_logs') || '[]');
             const session = JSON.parse(localStorage.getItem('xyz_session') || '{}');
             if(session.role === 'staff') logs = logs.filter(l => l.scannedBy === session.name);
             const userFilter = document.getElementById('filter-user-name')?.value.trim().toLowerCase();
@@ -1045,7 +1094,7 @@
 
         function resetScanner() { startScanner(); }
 
-        function onScanSuccess(decodedText) {
+        async function onScanSuccess(decodedText) {
             stopScanner();
             document.getElementById('scanner-container').classList.add('hidden');
             document.getElementById('scan-result-card').classList.remove('hidden');
@@ -1058,7 +1107,7 @@
             const title = document.getElementById('result-title'), text = document.getElementById('result-text');
 
             if(qrId) {
-                let qrs = JSON.parse(localStorage.getItem('xyz_secure_qrs') || '[]');
+                let qrs = JSON.parse(await localDB.getItem('xyz_secure_qrs') || '[]');
                 const qrIndex = qrs.findIndex(q => q.id === qrId);
                 if(qrIndex !== -1) {
                     const qrData = qrs[qrIndex]; text.innerText = qrData.originalText;
@@ -1079,11 +1128,11 @@
                         if(!Array.isArray(slist)) slist = typeof slist==='string' && slist ? slist.split(',') : [];
                         if(!slist.includes(userStr)) slist.push(userStr);
                         qrs[qrIndex].scannedByList = slist; qrs[qrIndex].scanCount = (qrs[qrIndex].scanCount||0)+1;
-                        localStorage.setItem('xyz_secure_qrs', JSON.stringify(qrs));
+                        await localDB.setItem('xyz_secure_qrs', JSON.stringify(qrs));
                         
                         const newLog = { id: 'log-'+Date.now(), qrId: qrData.id, qrTitle: qrData.title||qrData.originalText, scannedBy: userStr, scannedAt: Date.now(), isFirstScan: isFirst };
-                        let logs = JSON.parse(localStorage.getItem('xyz_scan_logs') || '[]'); logs.unshift(newLog);
-                        localStorage.setItem('xyz_scan_logs', JSON.stringify(logs));
+                        let logs = JSON.parse(await localDB.getItem('xyz_scan_logs') || '[]'); logs.unshift(newLog);
+                        await localDB.setItem('xyz_scan_logs', JSON.stringify(logs));
                         syncToGoogleSheet('add_scan_log', newLog);
                         
                         renderQRList(); renderStatusLogs(); renderHomeDashboard();
