@@ -203,7 +203,7 @@
                     </div>
                     
                     <div id="status-log-container" class="flex flex-col gap-3">
-                        <!-- JS will populate logs here -->
+                        <!-- Virtual Scroller will populate logs here -->
                     </div>
                 </div>
             </div>
@@ -285,7 +285,7 @@
                         </div>
 
                         <div id="qr-list-container" class="flex flex-col">
-                            <!-- JS will populate list here -->
+                            <!-- Virtual Scroller will populate list here -->
                         </div>
                     </div>
                 </div>
@@ -470,6 +470,79 @@
     <script>
         lucide.createIcons();
 
+        // --- Virtual Scrolling System (Advanced) ---
+        class VirtualScroller {
+            constructor(containerId, scrollParentSelector, itemHeight, renderItemCb, emptyMessage) {
+                this.container = document.getElementById(containerId);
+                this.scrollParent = this.container.closest(scrollParentSelector) || window;
+                this.itemHeight = itemHeight;
+                this.renderItemCb = renderItemCb;
+                this.emptyMessage = emptyMessage;
+                this.items = [];
+                this.buffer = 8; 
+
+                this.container.style.position = 'relative';
+                this.container.className = 'w-full'; 
+                
+                this.render = this.render.bind(this);
+                const sp = this.scrollParent === window ? window : this.scrollParent;
+                sp.addEventListener('scroll', () => this.render(), { passive: true });
+                window.addEventListener('resize', () => this.render(), { passive: true });
+                
+                this.lastStartIndex = -1;
+                this.lastEndIndex = -1;
+            }
+
+            setItems(items) {
+                this.items = items;
+                this.container.style.height = `${this.items.length * this.itemHeight}px`;
+                this.lastStartIndex = -1; 
+                this.render(true);
+            }
+
+            render(force = false) {
+                if (!this.items.length) {
+                    this.container.innerHTML = `<p class="text-xs text-gray-400 text-center mt-4 w-full absolute left-0">${this.emptyMessage}</p>`;
+                    this.container.style.height = '100px';
+                    return;
+                }
+
+                this.container.style.height = `${this.items.length * this.itemHeight}px`;
+
+                const parentRect = this.scrollParent === window ? { top: 0, height: window.innerHeight } : this.scrollParent.getBoundingClientRect();
+                const containerRect = this.container.getBoundingClientRect();
+
+                let visibleTop = (this.scrollParent === window ? 0 : parentRect.top) - containerRect.top;
+                if (visibleTop < 0) visibleTop = 0;
+                
+                const visibleBottom = visibleTop + (this.scrollParent === window ? window.innerHeight : parentRect.height);
+
+                const startIndex = Math.max(0, Math.floor(visibleTop / this.itemHeight) - this.buffer);
+                const endIndex = Math.min(this.items.length - 1, Math.ceil(visibleBottom / this.itemHeight) + this.buffer);
+
+                if (!force && this.lastStartIndex === startIndex && this.lastEndIndex === endIndex) return;
+
+                this.lastStartIndex = startIndex;
+                this.lastEndIndex = endIndex;
+
+                let html = '';
+                for (let i = startIndex; i <= endIndex; i++) {
+                    const gap = 12; 
+                    html += `<div style="position: absolute; top: ${i * this.itemHeight}px; left: 0; right: 0; height: ${this.itemHeight - gap}px;">` + 
+                            this.renderItemCb(this.items[i], i) + 
+                            `</div>`;
+                }
+
+                this.container.innerHTML = html;
+                if (window.lucide) {
+                    lucide.createIcons({ root: this.container });
+                }
+            }
+        }
+
+        let statusScroller = null;
+        let qrScroller = null;
+
         // Utilities
         function safeParseDate(dateInput) {
             if (!dateInput) return new Date();
@@ -629,6 +702,12 @@
             } else {
                 stopScanner();
             }
+            
+            // Re-render Virtual Scroller perfectly when tabs become active
+            setTimeout(() => {
+                if (tabId === 'status' && statusScroller) statusScroller.render(true);
+                if (tabId === 'qr' && qrScroller) qrScroller.render(true);
+            }, 400); 
         }
 
         function openSidebar() {
@@ -969,24 +1048,25 @@
                 qrs.sort((a, b) => safeParseDate(b.createdAt).getTime() - safeParseDate(a.createdAt).getTime());
             }
 
-            const session = JSON.parse(localStorage.getItem('xyz_session') || '{}');
-            const isOwner = session.email?.toLowerCase() === 'mjnoman184@gmail.com' || session.role === 'owner';
-
-            document.getElementById('qr-list-container').innerHTML = qrs.length ? qrs.map(qr => `
-                <div class="bg-gray-50 border p-4 rounded-2xl flex justify-between items-start mb-3">
-                    <div class="overflow-hidden pr-3 flex-1">
-                        <p class="font-semibold truncate text-sm">${qr.title || qr.originalText}</p>
-                        <p class="text-[10px] text-gray-400 mt-1">ID: ${qr.id}</p>
-                        <p class="text-[10px] text-gray-400"><i data-lucide="calendar" class="w-3 h-3 inline"></i> ${safeParseDate(qr.createdAt).toLocaleDateString()}</p>
-                    </div>
-                    <div class="flex items-center gap-1.5 shrink-0">
-                        <span class="text-[10px] font-bold px-2 py-1 bg-gray-200 rounded-lg">Scans: ${qr.scanCount||0}</span>
-                        <button onclick="previewSecureQR('${qr.id}')" class="bg-orange-50 text-orange-500 p-2 rounded-xl"><i data-lucide="eye" class="w-5 h-5"></i></button>
-                        ${isOwner ? `<button onclick="promptDeleteQR('${qr.id}')" class="bg-red-50 text-red-500 p-2 rounded-xl"><i data-lucide="trash-2" class="w-5 h-5"></i></button>` : ''}
-                    </div>
-                </div>
-            `).join('') : '<p class="text-xs text-gray-400 text-center mt-4">No QR codes found.</p>';
-            lucide.createIcons();
+            if (!qrScroller) {
+                qrScroller = new VirtualScroller('qr-list-container', '.overflow-y-auto', 120, (qr) => {
+                    const session = JSON.parse(localStorage.getItem('xyz_session') || '{}');
+                    const isOwner = session.email?.toLowerCase() === 'mjnoman184@gmail.com' || session.role === 'owner';
+                    return `<div class="bg-gray-50 border p-4 rounded-2xl flex justify-between items-start h-full w-full">
+                        <div class="overflow-hidden pr-3 flex-1">
+                            <p class="font-semibold truncate text-sm">${qr.title || qr.originalText}</p>
+                            <p class="text-[10px] text-gray-400 mt-1 truncate">ID: ${qr.id}</p>
+                            <p class="text-[10px] text-gray-400"><i data-lucide="calendar" class="w-3 h-3 inline"></i> ${safeParseDate(qr.createdAt).toLocaleDateString()}</p>
+                        </div>
+                        <div class="flex items-center gap-1.5 shrink-0 mt-1">
+                            <span class="text-[10px] font-bold px-2 py-1 bg-gray-200 rounded-lg">Scans: ${qr.scanCount||0}</span>
+                            <button onclick="previewSecureQR('${qr.id}')" class="bg-orange-50 text-orange-500 p-2 rounded-xl active:scale-95 transition-transform"><i data-lucide="eye" class="w-5 h-5"></i></button>
+                            ${isOwner ? `<button onclick="promptDeleteQR('${qr.id}')" class="bg-red-50 text-red-500 p-2 rounded-xl active:scale-95 transition-transform"><i data-lucide="trash-2" class="w-5 h-5"></i></button>` : ''}
+                        </div>
+                    </div>`;
+                }, 'No QR codes found.');
+            }
+            qrScroller.setItems(qrs);
         }
 
         let qrToDeleteId = null;
@@ -1062,12 +1142,15 @@
             const userFilter = document.getElementById('filter-user-name')?.value.trim().toLowerCase();
             if(userFilter) logs = logs.filter(l => l.scannedBy?.toLowerCase().includes(userFilter));
             
-            document.getElementById('status-log-container').innerHTML = logs.length ? logs.map(log => {
-                const isFirst = log.isFirstScan === true || log.isFirstScan === 'true' || log.isFirstScan === 'TRUE';
-                const lightColor = isFirst ? 'bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.8)]' : 'bg-red-500';
-                return `<div class="bg-gray-50 border p-4 rounded-2xl flex flex-col gap-1.5"><div class="flex justify-between items-center"><span class="font-bold text-sm"><i data-lucide="user" class="w-3.5 h-3.5 text-blue-500 inline"></i> ${log.scannedBy} <span class="w-2 h-2 rounded-full ${lightColor} inline-block ml-1 animate-pulse"></span></span><span class="text-[10px] text-gray-400 border px-2 py-0.5 rounded-full bg-white">${safeParseDate(log.scannedAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span></div><div class="bg-white border rounded p-2 mt-1"><p class="text-xs font-semibold truncate">${session.role === 'staff' ? log.qrId : log.qrTitle}</p>${session.role === 'staff' ? '' : `<p class="text-[10px] text-gray-400 font-mono mt-0.5">ID: ${log.qrId}</p>`}</div></div>`;
-            }).join('') : '<p class="text-center text-xs text-gray-400 mt-4">No scan activity found.</p>';
-            lucide.createIcons();
+            if (!statusScroller) {
+                statusScroller = new VirtualScroller('status-log-container', '.overflow-y-auto', 120, (log) => {
+                    const session = JSON.parse(localStorage.getItem('xyz_session') || '{}');
+                    const isFirst = log.isFirstScan === true || log.isFirstScan === 'true' || log.isFirstScan === 'TRUE';
+                    const lightColor = isFirst ? 'bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.8)]' : 'bg-red-500';
+                    return `<div class="bg-gray-50 border p-4 rounded-2xl flex flex-col gap-1.5 h-full w-full"><div class="flex justify-between items-center"><span class="font-bold text-sm"><i data-lucide="user" class="w-3.5 h-3.5 text-blue-500 inline"></i> ${log.scannedBy} <span class="w-2 h-2 rounded-full ${lightColor} inline-block ml-1 animate-pulse"></span></span><span class="text-[10px] text-gray-400 border px-2 py-0.5 rounded-full bg-white">${safeParseDate(log.scannedAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span></div><div class="bg-white border rounded p-2 mt-1 flex-1 overflow-hidden"><p class="text-xs font-semibold truncate">${session.role === 'staff' ? log.qrId : log.qrTitle}</p>${session.role === 'staff' ? '' : `<p class="text-[10px] text-gray-400 font-mono mt-0.5 truncate">ID: ${log.qrId}</p>`}</div></div>`;
+                }, 'No scan activity found.');
+            }
+            statusScroller.setItems(logs);
         }
 
         // --- Scanner Features ---
